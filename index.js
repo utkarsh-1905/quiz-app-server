@@ -8,6 +8,8 @@ const app = express();
 const cors = require("cors");
 const mongoose = require("mongoose");
 const morgan = require("morgan");
+const helmet = require("helmet");
+const nodemailer = require("nodemailer");
 const Question = require("./models/questions");
 
 const dbUrl = process.env.DB_URL;
@@ -22,10 +24,22 @@ connectDB()
   .then(() => console.log("Connected to Database"))
   .catch((e) => console.log(e));
 
+const transporter = nodemailer.createTransport({
+  service: "Gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.EMAIL_ID,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(morgan("dev"));
+app.use(morgan("combined"));
+app.use(helmet());
 
 app.post("/start", (req, res) => {
   // const {data} = req.body;
@@ -59,7 +73,7 @@ app.get("/react", async (req, res) => {
   const sendQues = () => {
     for (let i = 0; i < numberOfQuestions; i++) {
       let rand = Math.floor(Math.random() * questions.questions.length);
-      questionArray.push(questions.questions[0]);
+      questionArray.push(questions.questions[rand]);
       questions.questions.filter((_, index) => index !== rand);
     }
     return questionArray;
@@ -76,7 +90,7 @@ app.get("/cpp", async (req, res) => {
   const sendQues = () => {
     for (let i = 0; i < numberOfQuestions; i++) {
       let rand = Math.floor(Math.random() * questions.questions.length);
-      questionArray.push(questions[rand]);
+      questionArray.push(questions.questions[rand]);
       questions.questions.filter((_, index) => index !== rand);
     }
     return questionArray;
@@ -93,7 +107,7 @@ app.get("/js", async (req, res) => {
   const sendQues = () => {
     for (let i = 0; i < numberOfQuestions; i++) {
       let rand = Math.floor(Math.random() * questions.questions.length);
-      questionArray.push(questions[rand]);
+      questionArray.push(questions.questions[rand]);
       questions.questions.filter((_, index) => index !== rand);
     }
     return questionArray;
@@ -110,7 +124,7 @@ app.get("/html", async (req, res) => {
   const sendQues = () => {
     for (let i = 0; i < numberOfQuestions; i++) {
       let rand = Math.floor(Math.random() * questions.questions.length);
-      questionArray.push(questions[rand]);
+      questionArray.push(questions.questions[rand]);
       questions.questions.filter((_, index) => index !== rand);
     }
     return questionArray;
@@ -127,7 +141,7 @@ app.get("/css", async (req, res) => {
   const sendQues = () => {
     for (let i = 0; i < numberOfQuestions; i++) {
       let rand = Math.floor(Math.random() * questions.questions.length);
-      questionArray.push(questions[rand]);
+      questionArray.push(questions.questions[rand]);
       questions.questions.filter((_, index) => index !== rand);
     }
     return questionArray;
@@ -142,12 +156,14 @@ app.post("/add/:type", async (req, res) => {
   const type = req.params.type;
   const data = req.body;
   const options = [data.optn1, data.optn2, data.optn3, data.optn4];
+  const correct = data.correct;
   const newQuestions = new Question({
     category: type,
     questions: [
       {
         question: data.question,
         options: [...options],
+        correct: correct,
       },
     ],
   });
@@ -160,16 +176,49 @@ app.put("/create/:type", async (req, res) => {
   const data = req.body;
   console.log(data.question.length);
   const options = [data.optn1, data.optn2, data.optn3, data.optn4];
+  const correct = data.correct;
   const question = await Question.findOne({ category: type });
-  if ((question && data, question.length)) {
+  if (question && data) {
     question.questions.push({
       question: data.question,
       options: [...options],
+      correct: correct,
     });
     await question.save();
     res.status(200).send("Questions added");
   } else {
     res.status(404).send("Category not found");
+  }
+});
+
+app.post("/score", async (req, res) => {
+  const { score, type, mailID } = req.body;
+  await transporter
+    .sendMail({
+      from: `"Utkarsh" <utripathi_be21@thapar.edu>`,
+      to: mailID,
+      subject: "Your Score at out quiz!!",
+      html: `<h1>Your Scored ${score} in our ${type} quiz!!</h1>
+      <p>Thank you for participating in our quiz.</p>
+      <p>We hope you enjoyed the quiz.</p>
+      <p>Please Share with your friends.</p>
+      <p>Regards</p>
+      `,
+    })
+    .catch((err) => {
+      console.log(err);
+      res.status(400).json({ res: "Error in sending mail" });
+    });
+  res.status(200).json({ res: "Mail sent" });
+});
+
+app.delete("/deleteAll", async (req, res) => {
+  const pass = req.query.password;
+  if (pass == "deleteeverything") {
+    await Question.deleteMany({});
+    res.json({ status: "deleted all" });
+  } else {
+    res.json({ status: "wrong password" });
   }
 });
 
